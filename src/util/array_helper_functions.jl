@@ -1,4 +1,5 @@
 import Base: sum, prod, diff, mean, var, std, quantile, minimum, maximum, median, middle, cov, cor, cumprod, cumsum, cummin, cummax
+import DataStructures
 
 # define several helper functions such as sum or mean over nullable arrays (AbstractArrayWrapper{Nullable{T}}).
 
@@ -1655,47 +1656,47 @@ cumquantile{T}(arr::AbstractArrayWrapper{Nullable{T}}, q::Number, dims::Integer.
 end
 
 cumquantile_update!{T,U,R}(tgt::AbstractArray{Nullable{T}}, src::AbstractArray{Nullable{U}}, q::R) = begin
-  lowqueue = Collections.PriorityQueue{U,U,Base.Order.Ordering}(Base.Order.Reverse) # queue for smaller elements. Easy to get the maximum element.
-  highqueue = Collections.PriorityQueue{U,U,Base.Order.Ordering}(Base.Order.Forward) # queue for larger elements. Easy to get the minimum element.
+  lowqueue = DataStructures.PriorityQueue{U,U}(Base.Order.Reverse) # queue for smaller elements. Easy to get the maximum element.
+  highqueue = DataStructures.PriorityQueue{U,U}() # queue for larger elements. Easy to get the minimum element.
 
   dummy_index = 0
   for i in eachindex(src)
     srci = src[i]
     if !srci.isnull
       dummy_index += 1
-      if isempty(highqueue) || Collections.peek(highqueue)[2] < srci.value
-        Collections.enqueue!(highqueue, dummy_index, srci.value)
+      if isempty(highqueue) || DataStructures.peek(highqueue)[2] < srci.value
+        DataStructures.enqueue!(highqueue, dummy_index, srci.value)
       elseif isempty(lowqueue)
-        Collections.enqueue!(lowqueue, dummy_index, srci.value)
+        DataStructures.enqueue!(lowqueue, dummy_index, srci.value)
       end
       # check the queues and shuffle elements if necessary.
       quantile_denom = length(lowqueue) + length(highqueue) - 1
       while q < (length(lowqueue)-1) / quantile_denom
-        elem = Collections.peek(lowqueue)
-        Collections.dequeue!(lowqueue)
-        Collections.enqueue!(highqueue, elem...)
+        elem = DataStructures.peek(lowqueue)
+        DataStructures.dequeue!(lowqueue)
+        DataStructures.enqueue!(highqueue, elem...)
       end
       while q > length(lowqueue) / quantile_denom
-        elem = Collections.peek(highqueue)
-        Collections.dequeue!(highqueue)
-        Collections.enqueue!(lowqueue, elem...)
+        elem = DataStructures.peek(highqueue)
+        DataStructures.dequeue!(highqueue)
+        DataStructures.enqueue!(lowqueue, elem...)
       end
     end
     tgt[i] = if isempty(lowqueue)
       if isempty(highqueue)
         Nullable{T}()
       else
-        Nullable(convert(T, Collections.peek(highqueue)[2]))
+        Nullable(convert(T, DataStructures.peek(highqueue)[2]))
       end
     elseif isempty(highqueue)
-      Nullable(convert(T, Collections.peek(lowqueue)[2]))
+      Nullable(convert(T, DataStructures.peek(lowqueue)[2]))
     else
       lowlen = length(lowqueue)
       highlen = length(highqueue)
       low_quantile = (lowlen - 1) / (lowlen + highlen - 1)
       high_quantile = lowlen / (lowlen + highlen - 1)
-      lowpeek = Collections.peek(lowqueue)[2]
-      highpeek = Collections.peek(highqueue)[2]
+      lowpeek = DataStructures.peek(lowqueue)[2]
+      highpeek = DataStructures.peek(highqueue)[2]
       Nullable((lowpeek + (q - low_quantile) * (highpeek - lowpeek) / (high_quantile - low_quantile))::T)
     end
   end
